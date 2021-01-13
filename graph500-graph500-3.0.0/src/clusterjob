@@ -1,9 +1,9 @@
 #! /bin/bash
 #SBATCH -p q_student
-#SBATCH --time=10:00
+#SBATCH --time=5:00
 #SBATCH -N 32
-#SBATCH --ntasks-per-node=1   # start 4 processes per node
+#SBATCH --ntasks-per-node=32   # start 4 processes per node
 #SBATCH --cpu-freq=High       # set CPU frequency to maximum
-#SBATCH SKIP_VALIDATION=1
-srun ./graph500_reference_bfs 15
+export SCALE=8
+srun ./graph500_reference_bfs $SCALE  > out-$SCALE-$SLURM_JOB_NUM_NODES-$SLURM_NTASKS_PER_NODE.log
 
