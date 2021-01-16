@@ -137,7 +137,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 
     MPI_Allreduce(&q2c, &sum_newly_visited, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-		printf("Rank: %d, sum_newly_visited: %d\n", my_rank, sum_newly_visited);
+		//printf("Rank: %d, sum_newly_visited: %d\n", my_rank, sum_newly_visited);
 		//exit(1);
     // swap queues
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
