@@ -20,6 +20,9 @@ int64_t visited_size;
 int64_t *pred_glob,*column;
 int *rowstarts;
 oned_csr_graph g;
+int* q1, *q2;									// local indices
+int64_t* send_buf;
+int64_t* recv_buf;
 
 //user should provide this function which would be called once to do kernel 1: graph convert
 void make_graph_data_structure(const tuple_graph* const tg) {
@@ -31,6 +34,11 @@ void make_graph_data_structure(const tuple_graph* const tg) {
 	visited = xmalloc(visited_size*sizeof(unsigned long));
 	//user code to allocate other buffers for bfs
 	rowstarts=g.rowstarts;
+  // queue stuff
+	q1 = xmalloc(g.nlocalverts*sizeof(int));
+	q2 = xmalloc(g.nlocalverts*sizeof(int));
+	send_buf = xmalloc(g.nglobalverts*sizeof(int64_t));
+	recv_buf = xmalloc(g.nglobalverts*sizeof(int64_t));
 }
 
 //user should provide this function which would be called several times to do kernel 2: breadth first search
@@ -41,11 +49,9 @@ void run_bfs(int64_t root, int64_t* pred) {
 	//user code to do bfs
 	
   int64_t nvisited = 0;
-  
-  // queue stuff
-	int* q1 = xmalloc(g.nlocalverts*sizeof(int));
-	int* q2 = xmalloc(g.nlocalverts*sizeof(int));
-  int q1c, q2c;
+  int q1c = 0, q2c = 0;
+  int sum_newly_visited = 0;
+  int verts_per_proc = 0;
  
   // alloc iterators
   unsigned int i, j;
@@ -54,39 +60,67 @@ void run_bfs(int64_t root, int64_t* pred) {
 
 	CLEAN_VISITED();
 	for(i=0;i<g.nlocalverts;i++) q1[i]=0,q2[i]=0;
+  for(i=0;i<g.nglobalverts-1;i++) send_buf[i]=-1;
 
-	nvisited=1;
-  pred[VERTEX_LOCAL(root)]=root;
-	SET_VISITED(root);
-	q1[0]=VERTEX_LOCAL(root);
-	q1c = 1; 
+  // MPI SETUP
+  int my_rank = 0;
+  int num_procs = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
 
+  if (VERTEX_OWNER(root) == my_rank) {
+  	pred[VERTEX_LOCAL(root)] = root;
+		SET_VISITED(root);
+		q1[0] = VERTEX_LOCAL(root);
+		q1c = 1; 
+  }
+  
+  sum_newly_visited = 1;
+  verts_per_proc = (g.nglobalverts - 1) / num_procs;
+  
 	// While there are vertices in current level
-	while(q1c != 0) {
+	
+	while(sum_newly_visited != 0) {
 
 		q2c=0;
 
-		//for all vertices in current level send visit AMs to all neighbours
-		for( i = 0; i < q1c; i++ ) {
-		  //printf("Checking neighbours for %d!\n", q1[i]);
+		for( i = 0; i < q1c; i++ ) {		  
 			for( j = rowstarts[q1[i]]; j < rowstarts[q1[i]+1]; j++ ) {
-			  //printf("Found neighbour %d \n", COLUMN(j));
-				if (!TEST_VISITED(COLUMN(j))) {
-				  //printf("Not visitid\n");
-					SET_VISITED(COLUMN(j));
-					pred[COLUMN(j)] = VERTEX_LOCAL(q1[i]);
-					q2[q2c++] = COLUMN(j);
-				}
+			
+				send_buf[VERTEX_OWNER(COLUMN(j))*verts_per_proc + VERTEX_LOCAL(COLUMN(j))] = q1[i];
+				
 			}
 		}
+
+    MPI_Alltoall(send_buf, verts_per_proc, MPI_LONG, recv_buf, verts_per_proc, MPI_LONG, MPI_COMM_WORLD);
+		MPI_Barrier(MPI_COMM_WORLD);
+		
+		
+		for (i = 0; i < num_procs; i++) {
+			for(j = 0; j < verts_per_proc; j++) {
+		
+				int64_t p = recv_buf[i*verts_per_proc + j];
+		
+				if (p != -1) {
+					if (!TEST_VISITEDLOC(j)) {
+						SET_VISITEDLOC(j);
+						pred[j] = VERTEX_TO_GLOBAL(i,p);
+						q2[q2c++] = j;
+					}
+				}
+				
+				send_buf[i*verts_per_proc + j] = -1;
+			}
+		}
+
+    MPI_Allreduce(&q2c, &sum_newly_visited, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+		
 
     // swap queues
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
 		nvisited += q1c;
-
+		
 	}
-
-  free(q1); free(q2);
 }
 
 //we need edge count to calculate teps. Validation will check if this count is correct
