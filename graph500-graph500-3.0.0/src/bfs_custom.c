@@ -23,6 +23,7 @@ oned_csr_graph g;
 int* q1, *q2;									// local indices
 int64_t* send_buf;
 int64_t* recv_buf;
+int nglobalverts_fixed;
 
 //user should provide this function which would be called once to do kernel 1: graph convert
 void make_graph_data_structure(const tuple_graph* const tg) {
@@ -37,8 +38,10 @@ void make_graph_data_structure(const tuple_graph* const tg) {
   // queue stuff
 	q1 = xmalloc(g.nlocalverts*sizeof(int));
 	q2 = xmalloc(g.nlocalverts*sizeof(int));
-	send_buf = xmalloc(g.nglobalverts*sizeof(int64_t));
-	recv_buf = xmalloc(g.nglobalverts*sizeof(int64_t));
+	nglobalverts_fixed = g.nglobalverts - g.nglobalverts%2;
+	send_buf = xmalloc(nglobalverts_fixed*sizeof(int64_t));
+	recv_buf = xmalloc(nglobalverts_fixed*sizeof(int64_t));
+
 }
 
 //user should provide this function which would be called several times to do kernel 2: breadth first search
@@ -60,7 +63,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 
 	CLEAN_VISITED();
 	for(i=0;i<g.nlocalverts;i++) q1[i]=0,q2[i]=0;
-  for(i=0;i<g.nglobalverts-1;i++) send_buf[i]=-1;
+  for(i=0;i<nglobalverts_fixed;i++) send_buf[i]=-1;
 
   // MPI SETUP
   int my_rank = 0;
@@ -76,9 +79,11 @@ void run_bfs(int64_t root, int64_t* pred) {
   }
   
   sum_newly_visited = 1;
-  verts_per_proc = (g.nglobalverts - 1) / num_procs;
+  verts_per_proc = nglobalverts_fixed / num_procs;
   
 	// While there are vertices in current level
+	
+	printf("global: %ld\n", nglobalverts_fixed);
 	
 	while(sum_newly_visited != 0) {
 
@@ -90,6 +95,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 			}
 		}
 
+		/*
 		if (my_rank == 0) {
 			printf("Rank: %d - send_buf:", my_rank);
 			for (i = 0; i < g.nglobalverts-1; i++) {
@@ -97,6 +103,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 			}
 			printf("\n");
 		}
+		*/
 
     MPI_Alltoall(send_buf, verts_per_proc, MPI_LONG, recv_buf, verts_per_proc, MPI_LONG, MPI_COMM_WORLD);
 		MPI_Barrier(MPI_COMM_WORLD);		
@@ -118,6 +125,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 			}
 		}
 
+		/*
 		if (my_rank == 1) {
 			printf("Rank: %d - recv_buf:", my_rank);
 			for (i = 0; i < g.nglobalverts-1; i++) {
@@ -125,11 +133,12 @@ void run_bfs(int64_t root, int64_t* pred) {
 			}
 			printf("\n");
 		}
+		*/
 
     MPI_Allreduce(&q2c, &sum_newly_visited, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
 		printf("Rank: %d, sum_newly_visited: %d\n", my_rank, sum_newly_visited);
-		exit(1);
+		//exit(1);
     // swap queues
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
 		nvisited += q1c;
