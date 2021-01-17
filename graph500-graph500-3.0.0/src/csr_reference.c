@@ -104,6 +104,12 @@ void convert_graph_to_oned_csr(const tuple_graph* const tg, oned_csr_graph* cons
 	size_t nlocalverts = VERTEX_LOCAL(nglobalverts + num_pes() - 1 - my_pe());
 	g->nlocalverts = nlocalverts;
 
+	g->num_local_isolated = 0;
+	for(i=0;i<g->nlocalverts;i++) {
+		long deg = degrees[i];
+		if(!deg) g->num_local_isolated++;
+	}
+
 	//graph stats printing
 #ifdef DEBUGSTATS
 	long maxdeg=0,isolated=0,totaledges=0,originaledges;

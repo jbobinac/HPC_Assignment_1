@@ -153,7 +153,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
 		nvisited += q1c;
 		
-		if (nvisited == verts_per_proc && q1c == 0) {
+		if (nvisited == verts_per_proc - g.num_local_isolated && q1c == 0) {
 			printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
 		}
 	}
