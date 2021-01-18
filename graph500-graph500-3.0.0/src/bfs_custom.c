@@ -94,6 +94,11 @@ void run_bfs(int64_t root, int64_t* pred) {
 	// While there are vertices in current level
 	
 	int num_round = 0;
+	int* dead_at_round;
+	if (my_rank == 0) {
+		dead_at_round = xmalloc(num_procs*sizeof(int));
+		for (i=0;i<num_procs;i++) dead_at_round[i]=0;
+	}
 	
 	while(sum_newly_visited != 0) {
 
@@ -108,13 +113,14 @@ void run_bfs(int64_t root, int64_t* pred) {
 				}
 			}
 			
-			if (num_round == 1 && my_rank == 0) {
+			if (my_rank == 0) {
 				nvisited = verts_per_proc - g.num_local_isolated;
 				q1c = 0;
 			}
 			
+			
 			if (nvisited == verts_per_proc - g.num_local_isolated && q1c == 0) {
-				printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
+				//printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
 				for (i = 0; i < num_procs; i++) {
 					send_buf[i*verts_per_proc] = -2;
 				}
@@ -167,8 +173,11 @@ void run_bfs(int64_t root, int64_t* pred) {
 					p = recv_buf[i*verts_per_proc + j];
 			
 					if ( j == 0 && p == -2) {
-						printf("Rank %d: %d is dead for me!!\n", my_rank, i);
+						//printf("Rank %d: %d is dead for me!!\n", my_rank, i);
 						is_proc_dead[i] = 1;
+						if (my_rank == 0) {
+							dead_at_round[i] = num_round;
+						}
 					}
 					else if (p > -1) {
 						if (!TEST_VISITEDLOC(j)) {
@@ -190,12 +199,24 @@ void run_bfs(int64_t root, int64_t* pred) {
     // swap queues
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
 		//nvisited += q1c;
-		
-		//printf("Rank %d, round %d: nvisited: %d, verts_per_proc-g.num_isolated: %d\n", my_rank, num_round, nvisited, verts_per_proc-g.num_local_isolated);
-		
 	}
 	
-	//printf("Rank %d: num_visited: %d\n", my_rank, nvisited);
+	
+	if (my_rank == 0) {
+	
+		for (i=0;i<num_procs;i++)
+			if (dead_at_round[i]==0)
+				dead_at_round[i]=num_round;
+	
+		int* count_deaths = xmalloc(num_round*sizeof(int));
+		for (i=0;i<num_round;i++) count_deaths[i] = 0;
+		for (i=0;i<num_procs;i++) count_deaths[dead_at_round[i]-1]++;
+		
+		for (i=0;i<num_round;i++) printf("Round %d: deaths: %d\n", i+1, count_deaths[i]);
+	}
+	
+	
+	
 	free(requests);
 	exit(1);
 }
