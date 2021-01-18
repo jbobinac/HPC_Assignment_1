@@ -112,16 +112,6 @@ void run_bfs(int64_t root, int64_t* pred) {
 
     //MPI_Alltoall(send_buf, verts_per_proc, MPI_LONG, recv_buf, verts_per_proc, MPI_LONG, MPI_COMM_WORLD);
 		
-		/*		
-		if (my_rank == 0) {
-			printf("Rank: %d - send_buf:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", send_buf[i]);
-			}
-			printf("\n");
-		}
-		*/
-		
 		if (!is_proc_dead[my_rank]) {
 			for (i = 1; i < num_procs+1; i++) {
 				prev = (my_rank-i+num_procs) % size;
@@ -135,6 +125,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 					}
 					else {
 						// next still alive -> just sending
+						//printf("Rank %d: sending to %d\n", my_rank, next);
 						MPI_Isend(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[2*i-1]);
 					}
 				}
@@ -142,29 +133,22 @@ void run_bfs(int64_t root, int64_t* pred) {
 					// prev is alive
 					if (is_proc_dead[next]) {
 						// next is dead -> just receiving
+						//printf("Rank %d: recv from %d\n", my_rank, prev);
 						MPI_Irecv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[2*(i-1)]);
 					}
 					else {
 						// both are alive -> send & receive
+						//printf("Rank %d: sending to %d\n", my_rank, next);
+						//printf("Rank %d: recv from %d\n", my_rank, prev);
 						MPI_Isend(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[2*i-1]);
 						MPI_Irecv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[2*(i-1)]);
 						//MPI_Sendrecv(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, &recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 					}
 				}
 			}
-		}
 		
-		MPI_Waitall(2*num_procs, requests, statuss);
-		
-		/*
-		if (my_rank == 1) {
-			printf("Rank: %d - recv_buf:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", recv_buf[i]);
-			}
-			printf("\n");
+			MPI_Waitall(2*num_procs, requests, statuss);
 		}
-		*/
 		
 		if (!is_proc_dead[my_rank]) {
 			for (i = 0; i < num_procs; i++) {
@@ -202,7 +186,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 			printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
 			for (i = 0; i < num_procs; i++) {
 				send_buf[i*verts_per_proc] = -2;
-				is_proc_dead[my_rank] = 1;
+				//is_proc_dead[my_rank] = 1;
 			}
 		}
 	}
