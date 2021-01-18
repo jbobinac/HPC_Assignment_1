@@ -107,9 +107,14 @@ void run_bfs(int64_t root, int64_t* pred) {
 					send_buf[VERTEX_OWNER(COLUMN(j))*verts_per_proc + VERTEX_LOCAL(COLUMN(j))] = q1[i];				
 				}
 			}
+			
+			if (nvisited == verts_per_proc - g.num_local_isolated && q1c == 0) {
+				printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
+				for (i = 0; i < num_procs; i++) {
+					send_buf[i*verts_per_proc] = -2;
+				}
+			}
 		}
-
-
     //MPI_Alltoall(send_buf, verts_per_proc, MPI_LONG, recv_buf, verts_per_proc, MPI_LONG, MPI_COMM_WORLD);
 		
 		if (!is_proc_dead[my_rank]) {
@@ -156,11 +161,11 @@ void run_bfs(int64_t root, int64_t* pred) {
 			
 					p = recv_buf[i*verts_per_proc + j];
 			
-					if (p == -2) {
+					if ( j == 0 && p == -2) {
 						printf("Rank %d: %d is dead for me!!\n", my_rank, i);
 						is_proc_dead[i] = 1;
 					}
-					else if (p != -1) {
+					else if (p > -1) {
 						if (!TEST_VISITEDLOC(j)) {
 							SET_VISITEDLOC(j);
 							pred[j] = VERTEX_TO_GLOBAL(i,p);
@@ -182,13 +187,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 		//nvisited += q1c;
 		
 		//printf("Rank %d, round %d: nvisited: %d, verts_per_proc-g.num_isolated: %d\n", my_rank, num_round, nvisited, verts_per_proc-g.num_local_isolated);
-		if (nvisited == verts_per_proc - g.num_local_isolated && q1c == 0) {
-			printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
-			for (i = 0; i < num_procs; i++) {
-				send_buf[i*verts_per_proc] = -2;
-				//is_proc_dead[my_rank] = 1;
-			}
-		}
+		
 	}
 	
 	//printf("Rank %d: num_visited: %d\n", my_rank, nvisited);
