@@ -75,6 +75,8 @@ void run_bfs(int64_t root, int64_t* pred) {
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
   MPI_Status status;
+  MPI_Status* statuss = xmalloc(2*num_procs*sizeof(MPI_Status));
+  MPI_Request* requests = xmalloc(2*num_procs*sizeof(MPI_Request));
 
   if (VERTEX_OWNER(root) == my_rank) {
   	pred[VERTEX_LOCAL(root)] = root;
@@ -133,22 +135,26 @@ void run_bfs(int64_t root, int64_t* pred) {
 					}
 					else {
 						// next still alive -> just sending
-						MPI_Send(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD);
+						MPI_Isend(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[2*i-1]);
 					}
 				}
 				else {
 					// prev is alive
 					if (is_proc_dead[next]) {
 						// next is dead -> just receiving
-						MPI_Recv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+						MPI_Irecv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[2*(i-1)]);
 					}
 					else {
 						// both are alive -> send & receive
-						MPI_Sendrecv(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, &recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+						MPI_Isend(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[2*i-1]);
+						MPI_Irecv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[2*(i-1)]);
+						//MPI_Sendrecv(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, &recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 					}
 				}
 			}
 		}
+		
+		MPI_Waitall(2*num_procs, requests, statuss);
 		
 		/*
 		if (my_rank == 1) {
@@ -180,6 +186,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 					}
 					
 					send_buf[i*verts_per_proc + j] = -1;
+					recv_buf[i*verts_per_proc + j] = -1;
 				}
 			}
 		}
@@ -201,6 +208,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 	}
 	
 	//printf("Rank %d: num_visited: %d\n", my_rank, nvisited);
+	free(requests);
 }
 
 //we need edge count to calculate teps. Validation will check if this count is correct
