@@ -108,6 +108,11 @@ void run_bfs(int64_t root, int64_t* pred) {
 				}
 			}
 			
+			if (num_round == 1 && my_rank == 0) {
+				nvisited = verts_per_proc - g.num_local_isolated;
+				q1c = 0;
+			}
+			
 			if (nvisited == verts_per_proc - g.num_local_isolated && q1c == 0) {
 				printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
 				for (i = 0; i < num_procs; i++) {
@@ -192,6 +197,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 	
 	//printf("Rank %d: num_visited: %d\n", my_rank, nvisited);
 	free(requests);
+	exit(1);
 }
 
 //we need edge count to calculate teps. Validation will check if this count is correct
