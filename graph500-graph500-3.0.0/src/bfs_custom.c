@@ -12,6 +12,7 @@
 #include <limits.h>
 #include <assert.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 //VISITED bitmap parameters
 unsigned long *visited;
@@ -21,6 +22,7 @@ int64_t *pred_glob,*column;
 int *rowstarts;
 oned_csr_graph g;
 int* q1, *q2;									// local indices
+bool* is_proc_dead;						// dead procs array
 int64_t* send_buf;
 int64_t* recv_buf;
 int nglobalverts_fixed;
@@ -84,6 +86,8 @@ void run_bfs(int64_t root, int64_t* pred) {
   
   sum_newly_visited = 1;
   verts_per_proc = nglobalverts_fixed / num_procs;
+  is_proc_dead = xmalloc(num_procs*sizeof(bool));
+  for (i=0;i<num_procs;i++) is_proc_dead[i]=0;
   
 	// While there are vertices in current level
 	
@@ -95,9 +99,11 @@ void run_bfs(int64_t root, int64_t* pred) {
 		
 		q2c=0;
 
-		for( i = 0; i < q1c; i++ ) {		  
-			for( j = rowstarts[q1[i]]; j < rowstarts[q1[i]+1]; j++ ) {
-				send_buf[VERTEX_OWNER(COLUMN(j))*verts_per_proc + VERTEX_LOCAL(COLUMN(j))] = q1[i];				
+		if (!is_proc_dead[my_rank]) {
+			for( i = 0; i < q1c; i++ ) {		  
+				for( j = rowstarts[q1[i]]; j < rowstarts[q1[i]+1]; j++ ) {
+					send_buf[VERTEX_OWNER(COLUMN(j))*verts_per_proc + VERTEX_LOCAL(COLUMN(j))] = q1[i];				
+				}
 			}
 		}
 
@@ -114,10 +120,34 @@ void run_bfs(int64_t root, int64_t* pred) {
 		}
 		*/
 		
-		for (i = 1; i < num_procs+1; i++) {
-			prev = (my_rank-i+num_procs) % size;
-			next = (my_rank+i) % size;
-			MPI_Sendrecv(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, &recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		if (!is_proc_dead[my_rank]) {
+			for (i = 1; i < num_procs+1; i++) {
+				prev = (my_rank-i+num_procs) % size;
+				next = (my_rank+i) % size;
+				
+				if (is_proc_dead[prev]) {
+					// prev is dead
+					if (is_proc_dead[next]) {
+						// both are dead -> doing nothing
+						continue;
+					}
+					else {
+						// next still alive -> just sending
+						MPI_Send(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD);
+					}
+				}
+				else {
+					// prev is alive
+					if (is_proc_dead[next]) {
+						// next is dead -> just receiving
+						MPI_Recv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+					}
+					else {
+						// both are alive -> send & receive
+						MPI_Sendrecv(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, &recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+					}
+				}
+			}
 		}
 		
 		/*
@@ -130,20 +160,27 @@ void run_bfs(int64_t root, int64_t* pred) {
 		}
 		*/
 		
-		for (i = 0; i < num_procs; i++) {
-			for(j = 0; j < verts_per_proc; j++) {
-		
-				p = recv_buf[i*verts_per_proc + j];
-		
-				if (p != -1) {
-					if (!TEST_VISITEDLOC(j)) {
-						SET_VISITEDLOC(j);
-						pred[j] = VERTEX_TO_GLOBAL(i,p);
-						q2[q2c++] = j;
+		if (!is_proc_dead[my_rank]) {
+			for (i = 0; i < num_procs; i++) {
+				for(j = 0; j < verts_per_proc; j++) {
+			
+					p = recv_buf[i*verts_per_proc + j];
+			
+					if (p == -2) {
+						printf("Rank %d: %d is dead for me!!\n", my_rank, i);
+						is_proc_dead[i] = 1;
 					}
+					else if (p != -1) {
+						if (!TEST_VISITEDLOC(j)) {
+							SET_VISITEDLOC(j);
+							pred[j] = VERTEX_TO_GLOBAL(i,p);
+							q2[q2c++] = j;
+							nvisited++;
+						}
+					}
+					
+					send_buf[i*verts_per_proc + j] = -1;
 				}
-				
-				send_buf[i*verts_per_proc + j] = -1;
 			}
 		}
 
@@ -151,10 +188,15 @@ void run_bfs(int64_t root, int64_t* pred) {
 
     // swap queues
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
-		nvisited += q1c;
+		//nvisited += q1c;
 		
+		//printf("Rank %d, round %d: nvisited: %d, verts_per_proc-g.num_isolated: %d\n", my_rank, num_round, nvisited, verts_per_proc-g.num_local_isolated);
 		if (nvisited == verts_per_proc - g.num_local_isolated && q1c == 0) {
 			printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
+			for (i = 0; i < num_procs; i++) {
+				send_buf[i*verts_per_proc] = -2;
+				is_proc_dead[my_rank] = 1;
+			}
 		}
 	}
 	
@@ -186,6 +228,9 @@ void clean_pred(int64_t* pred) {
 void free_graph_data_structure(void) {
 	free_oned_csr_graph(&g);
 	free(visited);
+	free(q1);
+	free(q2);
+	free(is_proc_dead);
 }
 
 //user should change is function if distribution(and counts) of vertices is changed
