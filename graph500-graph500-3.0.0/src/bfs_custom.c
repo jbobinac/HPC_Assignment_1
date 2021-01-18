@@ -88,8 +88,6 @@ void run_bfs(int64_t root, int64_t* pred) {
   
   sum_newly_visited = 1;
   verts_per_proc = nglobalverts_fixed / num_procs;
-  is_proc_dead = xmalloc(num_procs*sizeof(bool));
-  for (i=0;i<num_procs;i++) is_proc_dead[i]=0;
   
 	// While there are vertices in current level
 	
@@ -121,39 +119,14 @@ void run_bfs(int64_t root, int64_t* pred) {
 			printf("\n");
 		}
 		*/
-		
-		if (!is_proc_dead[my_rank]) {
-			for (i = 1; i < num_procs+1; i++) {
-				prev = (my_rank-i+num_procs) % size;
-				next = (my_rank+i) % size;
-				
-				if (is_proc_dead[prev]) {
-					// prev is dead
-					if (is_proc_dead[next]) {
-						// both are dead -> doing nothing
-						continue;
-					}
-					else {
-						// next still alive -> just sending
-						MPI_Isend(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[2*i-1]);
-					}
-				}
-				else {
-					// prev is alive
-					if (is_proc_dead[next]) {
-						// next is dead -> just receiving
-						MPI_Irecv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[2*(i-1)]);
-					}
-					else {
-						// both are alive -> send & receive
-						MPI_Isend(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[2*i-1]);
-						MPI_Irecv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[2*(i-1)]);
-						//MPI_Sendrecv(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, &recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-					}
-				}
-			}
+		for (i = 1; i < num_procs+1; i++) {
+			prev = (my_rank-i+num_procs) % size;
+			next = (my_rank+i) % size;
+
+			MPI_Isend(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[2*i-1]);
+			MPI_Irecv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[2*(i-1)]);
 		}
-		
+				
 		MPI_Waitall(2*num_procs, requests, statuss);
 		
 		/*
@@ -172,11 +145,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 			
 					p = recv_buf[i*verts_per_proc + j];
 			
-					if (p == -2) {
-						printf("Rank %d: %d is dead for me!!\n", my_rank, i);
-						is_proc_dead[i] = 1;
-					}
-					else if (p != -1) {
+					if (p != -1) {
 						if (!TEST_VISITEDLOC(j)) {
 							SET_VISITEDLOC(j);
 							pred[j] = VERTEX_TO_GLOBAL(i,p);
@@ -196,15 +165,6 @@ void run_bfs(int64_t root, int64_t* pred) {
     // swap queues
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
 		//nvisited += q1c;
-		
-		//printf("Rank %d, round %d: nvisited: %d, verts_per_proc-g.num_isolated: %d\n", my_rank, num_round, nvisited, verts_per_proc-g.num_local_isolated);
-		if (nvisited == verts_per_proc - g.num_local_isolated && q1c == 0) {
-			printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
-			for (i = 0; i < num_procs; i++) {
-				send_buf[i*verts_per_proc] = -2;
-				is_proc_dead[my_rank] = 1;
-			}
-		}
 	}
 	
 	//printf("Rank %d: num_visited: %d\n", my_rank, nvisited);
