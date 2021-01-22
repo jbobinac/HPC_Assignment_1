@@ -22,9 +22,10 @@ int64_t *pred_glob,*column;
 int *rowstarts;
 oned_csr_graph g;
 int* q1, *q2;									// local indices
-bool* is_proc_dead;						// dead procs array
-int64_t* send_buf;
-int64_t* recv_buf;
+int64_t* send_buf_visitors, * send_buf_visited;
+int64_t* recv_buf_visitors, * recv_buf_visited;
+int* num_visited_this_round;
+int* num_visitors_this_round;
 int nglobalverts_fixed;
 
 //user should provide this function which would be called once to do kernel 1: graph convert
@@ -41,9 +42,11 @@ void make_graph_data_structure(const tuple_graph* const tg) {
 	q1 = xmalloc(g.nlocalverts*sizeof(int));
 	q2 = xmalloc(g.nlocalverts*sizeof(int));
 	nglobalverts_fixed = g.nglobalverts - g.nglobalverts%2;
-	send_buf = xmalloc(nglobalverts_fixed*sizeof(int64_t));
-	recv_buf = xmalloc(nglobalverts_fixed*sizeof(int64_t));
-
+	
+	send_buf_visitors = xmalloc(nglobalverts_fixed*sizeof(int64_t));
+	send_buf_visited = xmalloc(nglobalverts_fixed*sizeof(int64_t));
+	recv_buf_visitors = xmalloc(nglobalverts_fixed*sizeof(int64_t));
+	recv_buf_visited = xmalloc(nglobalverts_fixed*sizeof(int64_t));
 }
 
 //user should provide this function which would be called several times to do kernel 2: breadth first search
@@ -67,7 +70,6 @@ void run_bfs(int64_t root, int64_t* pred) {
 
 	CLEAN_VISITED();
 	for(i=0;i<g.nlocalverts;i++) q1[i]=0,q2[i]=0;
-  for(i=0;i<nglobalverts_fixed;i++) send_buf[i]=-1;
 
   // MPI SETUP
   int my_rank = 0;
@@ -75,8 +77,9 @@ void run_bfs(int64_t root, int64_t* pred) {
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
   MPI_Status status;
-  MPI_Status* statuss = xmalloc(2*num_procs*sizeof(MPI_Status));
-  MPI_Request* requests = xmalloc(2*num_procs*sizeof(MPI_Request));
+  MPI_Status* statuss = xmalloc(4*num_procs*sizeof(MPI_Status));
+  MPI_Request* requests = xmalloc(4*num_procs*sizeof(MPI_Request));
+	int request_index = 0;
 
   if (VERTEX_OWNER(root) == my_rank) {
   	pred[VERTEX_LOCAL(root)] = root;
@@ -88,6 +91,12 @@ void run_bfs(int64_t root, int64_t* pred) {
   
   sum_newly_visited = 1;
   verts_per_proc = nglobalverts_fixed / num_procs;
+	num_visited_this_round = xmalloc(num_procs*sizeof(int));
+	num_visitors_this_round = xmalloc(num_procs*sizeof(int));
+  
+  for (i=0;i<num_procs;i++) num_visited_this_round[i]=0, num_visitors_this_round[i]=0;
+  for (i=0;i<nglobalverts_fixed;i++) send_buf_visited[i]=-1, send_buf_visitors[i]=-1;
+  for (i=0;i<nglobalverts_fixed;i++) recv_buf_visited[i]=-1, recv_buf_visitors[i]=-1;
   
 	// While there are vertices in current level
 	
@@ -98,75 +107,106 @@ void run_bfs(int64_t root, int64_t* pred) {
 		num_round++;
 		
 		q2c=0;
-
-		if (!is_proc_dead[my_rank]) {
-			for( i = 0; i < q1c; i++ ) {		  
-				for( j = rowstarts[q1[i]]; j < rowstarts[q1[i]+1]; j++ ) {
-					send_buf[VERTEX_OWNER(COLUMN(j))*verts_per_proc + VERTEX_LOCAL(COLUMN(j))] = q1[i];				
-				}
-			}
-		}
-
-
-    //MPI_Alltoall(send_buf, verts_per_proc, MPI_LONG, recv_buf, verts_per_proc, MPI_LONG, MPI_COMM_WORLD);
 		
-		/*		
-		if (my_rank == 0) {
-			printf("Rank: %d - send_buf:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", send_buf[i]);
-			}
-			printf("\n");
-		}
-		*/
-		for (i = 1; i < num_procs+1; i++) {
-			prev = (my_rank-i+num_procs) % size;
-			next = (my_rank+i) % size;
 
-			MPI_Isend(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[2*i-1]);
-			MPI_Irecv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[2*(i-1)]);
-		}
+		for( i = 0; i < q1c; i++ ) {		  
+			for( j = rowstarts[q1[i]]; j < rowstarts[q1[i]+1]; j++ ) {
+				//send_buf[VERTEX_OWNER(COLUMN(j))*verts_per_proc + VERTEX_LOCAL(COLUMN(j))] = q1[i];
+				//printf("asdf %d\n", VERTEX_OWNER(COLUMN(j))*verts_per_proc + num_visited_this_round[VERTEX_OWNER(COLUMN(j))]);
 				
-		MPI_Waitall(2*num_procs, requests, statuss);
-		
-		/*
-		if (my_rank == 1) {
-			printf("Rank: %d - recv_buf:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", recv_buf[i]);
-			}
-			printf("\n");
-		}
-		*/
-		
-		if (!is_proc_dead[my_rank]) {
-			for (i = 0; i < num_procs; i++) {
-				for(j = 0; j < verts_per_proc; j++) {
+				//printf("visitor: %ld, visited: %ld\n", q1[i], VERTEX_LOCAL(COLUMN(j)));
 			
-					p = recv_buf[i*verts_per_proc + j];
+				bool flag = true;
 			
-					if (p != -1) {
-						if (!TEST_VISITEDLOC(j)) {
-							SET_VISITEDLOC(j);
-							pred[j] = VERTEX_TO_GLOBAL(i,p);
-							q2[q2c++] = j;
-							nvisited++;
-						}
+				for (int k = 0; k < num_visited_this_round[VERTEX_OWNER(COLUMN(j))]; k++) {
+					if (send_buf_visited[VERTEX_OWNER(COLUMN(j))*verts_per_proc + k] == VERTEX_LOCAL(COLUMN(j))) {
+						flag = false;
+						break;
 					}
-					
-					send_buf[i*verts_per_proc + j] = -1;
-					recv_buf[i*verts_per_proc + j] = -1;
+				}
+				
+				if (flag) {
+					send_buf_visited[VERTEX_OWNER(COLUMN(j))*verts_per_proc + num_visited_this_round[VERTEX_OWNER(COLUMN(j))]] = VERTEX_LOCAL(COLUMN(j));
+					send_buf_visitors[VERTEX_OWNER(COLUMN(j))*verts_per_proc + num_visited_this_round[VERTEX_OWNER(COLUMN(j))]] = q1[i];				
+
+					num_visited_this_round[VERTEX_OWNER(COLUMN(j))]++;
 				}
 			}
+		}
+
+		/*		
+			printf("Rank: %d - send_buf_visited:", my_rank);
+			for (i = 0; i < g.nglobalverts-1; i++) {
+				printf(" %ld", send_buf_visited[i]);
+			}
+			printf("\nsend_buf_vistors:", my_rank);
+			for (i = 0; i < g.nglobalverts-1; i++) {
+				printf(" %ld", send_buf_visitors[i]);
+			}
+			printf("\n");
+		*/
+
+    MPI_Alltoall(num_visited_this_round, 1, MPI_INT, num_visitors_this_round, 1, MPI_INT, MPI_COMM_WORLD);
+		
+		//printf("Rank %d: visited: %d\n", my_rank, num_visited_this_round[0]);
+		//printf("Rank %d: visitors: %d\n", my_rank, num_visitors_this_round[0]);
+		
+		
+		for (i = 1; i < num_procs+1; i++) {
+			prev = (my_rank-i+num_procs) % num_procs;
+			next = (my_rank+i) % num_procs;
+
+			MPI_Isend(&send_buf_visited[next*verts_per_proc], num_visited_this_round[next], MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[request_index++]);
+			MPI_Irecv(&recv_buf_visited[prev*verts_per_proc], num_visitors_this_round[prev], MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[request_index++]);
+			MPI_Isend(&send_buf_visitors[next*verts_per_proc], num_visited_this_round[next], MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[request_index++]);
+			MPI_Irecv(&recv_buf_visitors[prev*verts_per_proc], num_visitors_this_round[prev], MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[request_index++]);
+		}
+
+		MPI_Waitall(4*num_procs, requests, statuss);
+
+		/*
+			printf("Rank: %d - recv_buf_vistied:", my_rank);
+			for (i = 0; i < g.nglobalverts-1; i++) {
+				printf(" %ld", recv_buf_visited[i]);
+			}
+			printf("\nrecv_buf_vistors:", my_rank);
+			for (i = 0; i < g.nglobalverts-1; i++) {
+				printf(" %ld", recv_buf_visitors[i]);
+			}
+			printf("\n");
+		*/
+
+		
+		for (i = 0; i < num_procs; i++) {
+			for(j = 0; j < num_visitors_this_round[i]; j++) {
+		
+				p = recv_buf_visitors[i*verts_per_proc + j];
+		
+				if (p != -1) {
+					if (!TEST_VISITEDLOC(recv_buf_visited[i*verts_per_proc + j])) {
+						SET_VISITEDLOC(recv_buf_visited[i*verts_per_proc + j]);
+						pred[recv_buf_visited[i*verts_per_proc + j]] = VERTEX_TO_GLOBAL(i,p);
+						q2[q2c++] = recv_buf_visited[i*verts_per_proc + j];
+						//printf("Rank %d: added %d to the queue!\n", my_rank, q2[q2c-1]);
+						nvisited++;
+					}
+				}
+				
+			}
+			
+			num_visited_this_round[i] = 0;
+			num_visitors_this_round[i] = 0;
 		}
 
     MPI_Allreduce(&q2c, &sum_newly_visited, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
     // swap queues
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
+		request_index = 0;
 		//nvisited += q1c;
+		//if (num_round == 2) exit(-1);
 	}
-	
+
 	//printf("Rank %d: num_visited: %d\n", my_rank, nvisited);
 	free(requests);
 }
@@ -198,7 +238,12 @@ void free_graph_data_structure(void) {
 	free(visited);
 	free(q1);
 	free(q2);
-	free(is_proc_dead);
+	free(send_buf_visitors);
+	free(send_buf_visited);
+	free(recv_buf_visitors);
+	free(recv_buf_visited);
+	free(num_visited_this_round);
+	free(num_visitors_this_round);
 }
 
 //user should change is function if distribution(and counts) of vertices is changed
