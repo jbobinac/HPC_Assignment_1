@@ -14,6 +14,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <time.h>
+
 //VISITED bitmap parameters
 unsigned long *visited;
 int64_t visited_size;
@@ -161,10 +163,18 @@ void run_bfs(int64_t root, int64_t* pred) {
 ////        }
 //        printf("\n");
 
+    clock_t start =  clock();
+
     MPI_Alltoall(num_visited_this_round, 1, MPI_INT, num_visitors_this_round, 1, MPI_INT, MPI_COMM_WORLD);
-		
-		//printf("Rank %d: visited: %d\n", my_rank, num_visited_this_round[0]);
+
+
+    double time = (clock() - start ) * 1000 / CLOCKS_PER_SEC;
+    if (my_rank == 0) printf("Alltoall time : %f \n", time);
+
+        //printf("Rank %d: visited: %d\n", my_rank, num_visited_this_round[0]);
 		//printf("Rank %d: visitors: %d\n", my_rank, num_visitors_this_round[0]);
+
+		start = clock();
 
         for (i = 1; i < num_procs+1; i++) {
 			prev = (my_rank-i+num_procs) % num_procs;
@@ -180,7 +190,8 @@ void run_bfs(int64_t root, int64_t* pred) {
 		}
 
 		MPI_Waitall(2*num_procs, requests, statuss);
-
+        double time2 = (clock() - start) * 1000 / CLOCKS_PER_SEC;
+        if (my_rank == 0) printf("Send and recv time : %f \n", time2);
 
 //			printf("Rank: %d - send_buf:", my_rank);
 //			for (i = 0; i < 2* nglobalverts_fixed; i++) {
