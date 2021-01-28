@@ -158,9 +158,9 @@ void run_bfs(int64_t root, int64_t* pred) {
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
 		nvisited += q1c;
 		
-		if (nvisited == verts_per_proc && q1c == 0) {
-			printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
-		}
+//		if (nvisited == verts_per_proc && q1c == 0) {
+//			printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
+//		}
 	}
 	
 	//printf("Rank %d: num_visited: %d\n", my_rank, nvisited);
