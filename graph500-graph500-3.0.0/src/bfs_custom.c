@@ -163,7 +163,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 ////        }
 //        printf("\n");
 
-    clock_t start =  clock();
+    //clock_t start =  clock();
 
     //MPI_Alltoall(num_visited_this_round, 1, MPI_INT, num_visitors_this_round, 1, MPI_INT, MPI_COMM_WORLD);
 
@@ -173,13 +173,13 @@ void run_bfs(int64_t root, int64_t* pred) {
         MPI_Sendrecv(&num_visited_this_round[next], 1, MPI_INT, next, 0, &num_visitors_this_round[prev], 1, MPI_INT, prev, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
-    double time = (clock() - start ) * 1000 / CLOCKS_PER_SEC;
-    if (my_rank < 5) printf("Alltoall time : %f \n", time);
+    //double time = (clock() - start ) * 1000 / CLOCKS_PER_SEC;
+    //if (my_rank < 5) printf("Alltoall time : %f \n", time);
 
         //printf("Rank %d: visited: %d\n", my_rank, num_visited_this_round[0]);
 		//printf("Rank %d: visitors: %d\n", my_rank, num_visitors_this_round[0]);
 
-		start = clock();
+		//start = clock();
 
         for (i = 1; i < num_procs+1; i++) {
 			prev = (my_rank-i+num_procs) % num_procs;
@@ -195,8 +195,8 @@ void run_bfs(int64_t root, int64_t* pred) {
 		}
 
 		MPI_Waitall(2*num_procs, requests, statuss);
-        double time2 = (clock() - start) * 1000 / CLOCKS_PER_SEC;
-        if (my_rank < 5) printf("Send and recv time : %f \n", time2);
+        //double time2 = (clock() - start) * 1000 / CLOCKS_PER_SEC;
+        //if (my_rank < 5) printf("Send and recv time : %f \n", time2);
 
 //			printf("Rank: %d - send_buf:", my_rank);
 //			for (i = 0; i < 2* nglobalverts_fixed; i++) {
