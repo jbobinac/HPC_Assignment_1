@@ -73,6 +73,8 @@ void run_bfs(int64_t root, int64_t* pred) {
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
   MPI_Status status;
+  MPI_Status* statuss = xmalloc(2*num_procs*sizeof(MPI_Status));
+  MPI_Request* requests = xmalloc(2*num_procs*sizeof(MPI_Request));
 
   if (VERTEX_OWNER(root) == my_rank) {
   	pred[VERTEX_LOCAL(root)] = root;
@@ -117,18 +119,21 @@ void run_bfs(int64_t root, int64_t* pred) {
 		for (i = 1; i < num_procs+1; i++) {
 			prev = (my_rank-i+num_procs) % size;
 			next = (my_rank+i) % size;
-			MPI_Sendrecv(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, &recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		}
-		
-		/*
-		if (my_rank == 1) {
-			printf("Rank: %d - recv_buf:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", recv_buf[i]);
-			}
-			printf("\n");
-		}
-		*/
+            MPI_Isend(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, MPI_COMM_WORLD, &requests[2*i-1]);
+            MPI_Irecv(&recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[2*(i-1)]);		}
+
+        MPI_Waitall(2*num_procs, requests, statuss);
+
+
+        /*
+        if (my_rank == 1) {
+            printf("Rank: %d - recv_buf:", my_rank);
+            for (i = 0; i < g.nglobalverts-1; i++) {
+                printf(" %ld", recv_buf[i]);
+            }
+            printf("\n");
+        }
+        */
 		
 		for (i = 0; i < num_procs; i++) {
 			for(j = 0; j < verts_per_proc; j++) {
