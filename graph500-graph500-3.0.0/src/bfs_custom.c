@@ -134,26 +134,9 @@ void run_bfs(int64_t root, int64_t* pred) {
 			}
 		}
 
-		/*		
-			printf("Rank: %d - send_buf_visited:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", send_buf_visited[i]);
-			}
-			printf("\nsend_buf_vistors:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", send_buf_visitors[i]);
-			}
-			printf("\n");
-		*/
+    	MPI_Alltoall(num_visited_this_round, 1, MPI_INT, num_visitors_this_round, 1, MPI_INT, MPI_COMM_WORLD);
 
-        //MPI_Alltoall(send_buf, verts_per_proc, MPI_LONG, recv_buf, verts_per_proc, MPI_LONG, MPI_COMM_WORLD);
-
-//        for (i = 1; i < num_procs+1; i++) {
-//            prev = (my_rank-i+num_procs) % size;
-//            next = (my_rank+i) % size;
-//            MPI_Sendrecv(&send_buf[next*verts_per_proc], verts_per_proc, MPI_LONG, next, 0, &recv_buf[prev*verts_per_proc], verts_per_proc, MPI_LONG, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-//        }
-
+		/*
         if (my_rank == 0){
             int sum = 0;
             int sum_visitors = 0;
@@ -163,9 +146,10 @@ void run_bfs(int64_t root, int64_t* pred) {
                 sum_visitors += num_visitors_this_round[0];
             }
 
-            printf("Rank %d: visited: %d\n", my_rank, sum;
+            printf("Rank %d: visited: %d\n", my_rank, sum);
             printf("Rank %d: visitors: %d\n", my_rank, sum_visitors);
         }
+		*/
 		
 		for (i = 1; i < num_procs+1; i++) {
 			prev = (my_rank-i+num_procs) % num_procs;
@@ -216,8 +200,8 @@ void run_bfs(int64_t root, int64_t* pred) {
     MPI_Allreduce(&q2c, &sum_newly_visited, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
     // swap queues
-		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
-		request_index = 0;
+	q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
+	request_index = 0;
 		//nvisited += q1c;
 		//if (num_round == 2) exit(-1);
 	}
