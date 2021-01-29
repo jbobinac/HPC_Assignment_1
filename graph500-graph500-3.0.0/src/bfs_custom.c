@@ -113,10 +113,10 @@ void run_bfs(int64_t root, int64_t* pred) {
 				}
 			}
 			
-			if (my_rank == 0) {
-				nvisited = verts_per_proc - g.num_local_isolated;
-				q1c = 0;
-			}
+//			if (my_rank == 0) {
+//				nvisited = verts_per_proc - g.num_local_isolated;
+//				q1c = 0;
+//			}
 			
 			
 			if (nvisited == verts_per_proc - g.num_local_isolated && q1c == 0) {
@@ -218,7 +218,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 	
 	
 	free(requests);
-	exit(1);
+	//exit(1);
 }
 
 //we need edge count to calculate teps. Validation will check if this count is correct
