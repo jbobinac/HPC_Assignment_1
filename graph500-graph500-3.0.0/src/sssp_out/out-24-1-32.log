@@ -1,0 +1,55 @@
+SCALE:                          24
+edgefactor:                     16
+NBFS:                           64
+graph_generation:               6.40625
+num_mpi_processes:              32
+construction_time:              2.43851
+bfs  min_time:                  0.773574
+bfs  firstquartile_time:        0.782969
+bfs  median_time:               0.788216
+bfs  thirdquartile_time:        0.798319
+bfs  max_time:                  0.820868
+bfs  mean_time:                 0.790703
+bfs  stddev_time:               0.0108732
+sssp min_time:                  1.60429
+sssp firstquartile_time:        1.96106
+sssp median_time:               2.07039
+sssp thirdquartile_time:        2.19473
+sssp max_time:                  2.42927
+sssp mean_time:                 2.08204
+sssp stddev_time:               0.169023
+min_nedge:                      268429687
+firstquartile_nedge:            268429687
+median_nedge:                   268429687
+thirdquartile_nedge:            268429687
+max_nedge:                      268429687
+mean_nedge:                     268429687
+stddev_nedge:                   0
+bfs  min_TEPS:                  3.27007e+08
+bfs  firstquartile_TEPS:        3.36244e+08
+bfs  median_TEPS:               3.40553e+08
+bfs  thirdquartile_TEPS:        3.42836e+08
+bfs  max_TEPS:                  3.46999e+08
+bfs  harmonic_mean_TEPS:     !  3.39482e+08
+bfs  harmonic_stddev_TEPS:      588152
+sssp min_TEPS:                  1.10498e+08
+sssp firstquartile_TEPS:        1.22307e+08
+sssp median_TEPS:               1.29652e+08
+sssp thirdquartile_TEPS:        1.3688e+08
+sssp max_TEPS:                  1.6732e+08
+sssp harmonic_mean_TEPS:     !  1.28927e+08
+sssp harmonic_stddev_TEPS:      1.31865e+06
+bfs  min_validate:              2.69078
+bfs  firstquartile_validate:    2.69811
+bfs  median_validate:           2.70449
+bfs  thirdquartile_validate:    2.71231
+bfs  max_validate:              2.73661
+bfs  mean_validate:             2.70668
+bfs  stddev_validate:           0.0108991
+sssp min_validate:              1.69065
+sssp firstquartile_validate:    1.69341
+sssp median_validate:           1.69497
+sssp thirdquartile_validate:    1.69688
+sssp max_validate:              1.69933
+sssp mean_validate:             1.69518
+sssp stddev_validate:           0.00231815
