@@ -111,10 +111,6 @@ void run_bfs(int64_t root, int64_t* pred) {
 
 		for( i = 0; i < q1c; i++ ) {		  
 			for( j = rowstarts[q1[i]]; j < rowstarts[q1[i]+1]; j++ ) {
-				//send_buf[VERTEX_OWNER(COLUMN(j))*verts_per_proc + VERTEX_LOCAL(COLUMN(j))] = q1[i];
-				//printf("asdf %d\n", VERTEX_OWNER(COLUMN(j))*verts_per_proc + num_visited_this_round[VERTEX_OWNER(COLUMN(j))]);
-				
-				//printf("visitor: %ld, visited: %ld\n", q1[i], VERTEX_LOCAL(COLUMN(j)));
 			
 				bool flag = true;
 			
@@ -135,21 +131,6 @@ void run_bfs(int64_t root, int64_t* pred) {
 		}
 
     	MPI_Alltoall(num_visited_this_round, 1, MPI_INT, num_visitors_this_round, 1, MPI_INT, MPI_COMM_WORLD);
-
-		/*
-        if (my_rank == 0){
-            int sum = 0;
-            int sum_visitors = 0;
-
-            for (i = 0; i < num_procs; i++) {
-                sum += num_visited_this_round[i];
-                sum_visitors += num_visitors_this_round[0];
-            }
-
-            printf("Rank %d: visited: %d\n", my_rank, sum);
-            printf("Rank %d: visitors: %d\n", my_rank, sum_visitors);
-        }
-		*/
 		
 		for (i = 1; i < num_procs+1; i++) {
 			prev = (my_rank-i+num_procs) % num_procs;
@@ -162,19 +143,6 @@ void run_bfs(int64_t root, int64_t* pred) {
 		}
 
 		MPI_Waitall(4*num_procs, requests, statuss);
-
-		/*
-			printf("Rank: %d - recv_buf_vistied:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", recv_buf_visited[i]);
-			}
-			printf("\nrecv_buf_vistors:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", recv_buf_visitors[i]);
-			}
-			printf("\n");
-		*/
-
 		
 		for (i = 0; i < num_procs; i++) {
 			for(j = 0; j < num_visitors_this_round[i]; j++) {
@@ -186,7 +154,6 @@ void run_bfs(int64_t root, int64_t* pred) {
 						SET_VISITEDLOC(recv_buf_visited[i*verts_per_proc + j]);
 						pred[recv_buf_visited[i*verts_per_proc + j]] = VERTEX_TO_GLOBAL(i,p);
 						q2[q2c++] = recv_buf_visited[i*verts_per_proc + j];
-						//printf("Rank %d: added %d to the queue!\n", my_rank, q2[q2c-1]);
 						nvisited++;
 					}
 				}
@@ -202,11 +169,7 @@ void run_bfs(int64_t root, int64_t* pred) {
     // swap queues
 	q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
 	request_index = 0;
-		//nvisited += q1c;
-		//if (num_round == 2) exit(-1);
 	}
-
-	//printf("Rank %d: num_visited: %d\n", my_rank, nvisited);
 	free(requests);
 }
 
