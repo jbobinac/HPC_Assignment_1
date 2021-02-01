@@ -82,9 +82,6 @@ void run_bfs(int64_t root, int64_t* pred) {
   verts_per_proc = nglobalverts_fixed / num_procs;
   
 	// While there are vertices in current level
-	
-	printf("global: %ld\n", nglobalverts_fixed);
-	
 	while(sum_newly_visited != 0) {
 
 		q2c=0;
@@ -95,19 +92,8 @@ void run_bfs(int64_t root, int64_t* pred) {
 			}
 		}
 
-		/*
-		if (my_rank == 0) {
-			printf("Rank: %d - send_buf:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", send_buf[i]);
-			}
-			printf("\n");
-		}
-		*/
-
     MPI_Alltoall(send_buf, verts_per_proc, MPI_LONG, recv_buf, verts_per_proc, MPI_LONG, MPI_COMM_WORLD);
-		MPI_Barrier(MPI_COMM_WORLD);		
-		
+
 		for (i = 0; i < num_procs; i++) {
 			for(j = 0; j < verts_per_proc; j++) {
 		
@@ -125,20 +111,8 @@ void run_bfs(int64_t root, int64_t* pred) {
 			}
 		}
 
-		/*
-		if (my_rank == 1) {
-			printf("Rank: %d - recv_buf:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", recv_buf[i]);
-			}
-			printf("\n");
-		}
-		*/
-
     MPI_Allreduce(&q2c, &sum_newly_visited, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-		//printf("Rank: %d, sum_newly_visited: %d\n", my_rank, sum_newly_visited);
-		//exit(1);
     // swap queues
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
 		nvisited += q1c;
