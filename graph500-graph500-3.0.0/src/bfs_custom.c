@@ -106,9 +106,6 @@ void run_bfs(int64_t root, int64_t* pred) {
 
 
 	for (i=0;i<num_procs;i++) num_visited_this_round[i]=0, num_visitors_this_round[i]=0;
-//  for (i=0;i<nglobalverts_fixed;i++) send_buf_visited[i]=-1, send_buf_visitors[i]=-1;
-//  for (i=0;i<nglobalverts_fixed;i++) recv_buf_visited[i]=-1 , recv_buf_visitors[i]=-1;
-
     for (i=0;i<2*nglobalverts_fixed;i++) send_buf[i]=-1;
     for (i=0;i<2*nglobalverts_fixed;i++) recv_buf[i]=-1;
 
@@ -126,15 +123,10 @@ void run_bfs(int64_t root, int64_t* pred) {
 
 		for( i = 0; i < q1c; i++ ) {		  
 			for( j = rowstarts[q1[i]]; j < rowstarts[q1[i]+1]; j++ ) {
-				//send_buf[2 * VERTEX_OWNER( COLUMN(j))*verts_per_proc + VERTEX_LOCAL(COLUMN(j))] = q1[i];
-				//printf("asdf %d\n", VERTEX_OWNER(COLUMN(j))*verts_per_proc + num_visited_this_round[VERTEX_OWNER(COLUMN(j))]);
-				
-				//printf("visitor: %ld, visited: %ld\n", q1[i], VERTEX_LOCAL(COLUMN(j)));
-			
+
 				bool flag = true;
 			
 				for (int k = 0; k < 2* num_visited_this_round[VERTEX_OWNER(COLUMN(j))]; k+=2) {
-					//if (send_buf_visited[VERTEX_OWNER(COLUMN(j))*verts_per_proc + k] == VERTEX_LOCAL(COLUMN(j))) {
                     if (send_buf[VERTEX_OWNER(COLUMN(j))*2*verts_per_proc + k] == VERTEX_LOCAL(COLUMN(j))) {
 						flag = false;
 						break;
@@ -143,7 +135,6 @@ void run_bfs(int64_t root, int64_t* pred) {
 				
 				if (flag) {
                     send_buf[ VERTEX_OWNER(COLUMN(j))*2*verts_per_proc + 2*num_visited_this_round[VERTEX_OWNER(COLUMN(j))]] = VERTEX_LOCAL(COLUMN(j));
-					//send_buf_visitors[VERTEX_OWNER(COLUMN(j))*verts_per_proc + num_visited_this_round[VERTEX_OWNER(COLUMN(j))]] = q1[i];
 
 					//store the visitors
                     send_buf[(VERTEX_OWNER(COLUMN(j)))*2*verts_per_proc + 2*num_visited_this_round[VERTEX_OWNER(COLUMN(j))] +1] = q1[i];
@@ -153,19 +144,8 @@ void run_bfs(int64_t root, int64_t* pred) {
 			}
 		}
 
-//        printf("Rank: %d - send_buf:", my_rank);
-//        for (i = 0; i < 2* nglobalverts_fixed; i++) {
-//            printf(" %d", send_buf[i]);
-//        }
-////        printf("\nrecv_buf:", my_rank);
-////        for (i = 0; i < 2* nglobalverts_fixed; i++) {
-////            printf(" %d", recv_buf[i]);
-////        }
-//        printf("\n");
 
     //clock_t start =  clock();
-
-    //MPI_Alltoall(num_visited_this_round, 1, MPI_INT, num_visitors_this_round, 1, MPI_INT, MPI_COMM_WORLD);
 
     for (int i = 1; i< num_procs +1; i++){
         prev = (my_rank-i+num_procs) % num_procs;
@@ -176,8 +156,6 @@ void run_bfs(int64_t root, int64_t* pred) {
     //double time = (clock() - start ) * 1000 / CLOCKS_PER_SEC;
     //if (my_rank < 5) printf("Alltoall time : %f \n", time);
 
-        //printf("Rank %d: visited: %d\n", my_rank, num_visited_this_round[0]);
-		//printf("Rank %d: visitors: %d\n", my_rank, num_visitors_this_round[0]);
 
 		//start = clock();
 
@@ -187,47 +165,23 @@ void run_bfs(int64_t root, int64_t* pred) {
 
             MPI_Isend(&send_buf[next*2*verts_per_proc], 2*num_visited_this_round[next], MPI_INT, next, 0, MPI_COMM_WORLD, &requests[request_index++]);
 			MPI_Irecv(&recv_buf[prev*2*verts_per_proc], 2*num_visitors_this_round[prev], MPI_INT, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[request_index++]);
-
-//			MPI_Isend(&send_buf_visited[next*verts_per_proc], num_visited_this_round[next], MPI_INT, next, 0, MPI_COMM_WORLD, &requests[request_index++]);
-//			MPI_Irecv(&recv_buf_visited[prev*verts_per_proc], num_visitors_this_round[prev], MPI_INT, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[request_index++]);
-			//MPI_Isend(&send_buf_visitors[next*verts_per_proc], num_visited_this_round[next], MPI_INT, next, 0, MPI_COMM_WORLD, &requests[request_index++]);
-			//MPI_Irecv(&recv_buf_visitors[prev*verts_per_proc], num_visitors_this_round[prev], MPI_INT, prev, MPI_ANY_TAG, MPI_COMM_WORLD, &requests[request_index++]);
 		}
 
 		MPI_Waitall(2*num_procs, requests, statuss);
         //double time2 = (clock() - start) * 1000 / CLOCKS_PER_SEC;
         //if (my_rank < 5) printf("Send and recv time : %f \n", time2);
 
-//			printf("Rank: %d - send_buf:", my_rank);
-//			for (i = 0; i < 2* nglobalverts_fixed; i++) {
-//				printf(" %d", send_buf[i]);
-//			}
-//			printf("\nRank: %d recv_buff", my_rank);
-//			for (i = 0; i < 2* nglobalverts_fixed; i++) {
-//				printf(" %d", recv_buf[i]);
-//			}
-//			printf("\n");
-
 
         for (i = 0; i < num_procs; i++) {
 			for(j = 0; j < num_visitors_this_round[i]; j++) {
 		
-				//p = recv_buf_visitors[i*verts_per_proc + j];
                 p = recv_buf[i*2*verts_per_proc + 2*j + 1 ];
 		
 				if (p != -1) {
-//					if (!TEST_VISITEDLOC(recv_buf_visited[i*verts_per_proc + j])) {
-//						SET_VISITEDLOC(recv_buf_visited[i*verts_per_proc + j]);
-//						pred[recv_buf_visited[i*verts_per_proc + j]] = VERTEX_TO_GLOBAL(i,p);
-//						q2[q2c++] = recv_buf_visited[i*verts_per_proc + j];
-//						//printf("Rank %d: added %d to the queue!\n", my_rank, q2[q2c-1]);
-//						nvisited++;
-//					}
                     if (!TEST_VISITEDLOC(recv_buf[i*2*verts_per_proc + 2*j])) {
                         SET_VISITEDLOC(recv_buf[i*2*verts_per_proc + 2*j]);
                         pred[recv_buf[i*2*verts_per_proc + 2*j]] = VERTEX_TO_GLOBAL(i,p);
                         q2[q2c++] = recv_buf[i*2*verts_per_proc + 2*j];
-                        //printf("Rank %d: added %d to the queue!\n", my_rank, q2[q2c-1]);
                         nvisited++;
                     }
 				}
@@ -243,11 +197,8 @@ void run_bfs(int64_t root, int64_t* pred) {
     // swap queues
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
 		request_index = 0;
-		//nvisited += q1c;
-		//if (num_round == 2) exit(-1);
-	}
 
-	//printf("Rank %d: num_visited: %d\n", my_rank, nvisited);
+	}
 	free(requests);
 }
 
