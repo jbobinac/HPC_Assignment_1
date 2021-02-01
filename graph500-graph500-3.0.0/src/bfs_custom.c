@@ -103,18 +103,6 @@ void run_bfs(int64_t root, int64_t* pred) {
 			}
 		}
 
-
-    //MPI_Alltoall(send_buf, verts_per_proc, MPI_LONG, recv_buf, verts_per_proc, MPI_LONG, MPI_COMM_WORLD);
-		
-		/*		
-		if (my_rank == 0) {
-			printf("Rank: %d - send_buf:", my_rank);
-			for (i = 0; i < g.nglobalverts-1; i++) {
-				printf(" %ld", send_buf[i]);
-			}
-			printf("\n");
-		}
-		*/
 		
 		for (i = 1; i < num_procs+1; i++) {
 			prev = (my_rank-i+num_procs) % size;
@@ -125,16 +113,6 @@ void run_bfs(int64_t root, int64_t* pred) {
         MPI_Waitall(2*num_procs, requests, statuss);
 
 
-        /*
-        if (my_rank == 1) {
-            printf("Rank: %d - recv_buf:", my_rank);
-            for (i = 0; i < g.nglobalverts-1; i++) {
-                printf(" %ld", recv_buf[i]);
-            }
-            printf("\n");
-        }
-        */
-		
 		for (i = 0; i < num_procs; i++) {
 			for(j = 0; j < verts_per_proc; j++) {
 		
@@ -157,13 +135,8 @@ void run_bfs(int64_t root, int64_t* pred) {
     // swap queues
 		q1c = q2c; int *tmp=q1; q1=q2; q2=tmp;
 		nvisited += q1c;
-		
-//		if (nvisited == verts_per_proc && q1c == 0) {
-//			printf("Round %d: %d is dead! x.x\n", num_round, my_rank);
-//		}
+
 	}
-	
-	//printf("Rank %d: num_visited: %d\n", my_rank, nvisited);
 }
 
 //we need edge count to calculate teps. Validation will check if this count is correct
